@@ -1,0 +1,209 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Fruit Shooter</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: url('https://i.imgur.com/JcO9hBA.jpg') no-repeat center center fixed;
+      background-size: cover;
+      font-family: sans-serif;
+      user-select: none;
+    }
+
+    canvas {
+      display: block;
+    }
+
+    #scoreboard, #game-over {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: white;
+      font-size: 20px;
+      z-index: 2;
+      background: rgba(0,0,0,0.4);
+      padding: 8px;
+      border-radius: 8px;
+    }
+
+    #game-over {
+      display: none;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      font-size: 32px;
+      padding: 20px;
+    }
+
+    #restart-btn {
+      margin-top: 10px;
+      font-size: 18px;
+      padding: 8px 16px;
+    }
+
+    #gun {
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      transition: transform 0.1s;
+      z-index: 2;
+      height: 100px;
+    }
+
+    #flash {
+      position: absolute;
+      bottom: 90px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: none;
+      z-index: 3;
+      height: 40px;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+  <div id="scoreboard">Score: 0 | Missed: 0/5</div>
+  <div id="game-over">
+    <div id="final-score"></div>
+    <button id="restart-btn">Restart</button>
+  </div>
+  <img src="https://i.imgur.com/Bmqeguh.png" id="gun" />
+  <img src="https://i.imgur.com/bsBZltd.png" id="flash" />
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    let score = 0;
+    let missed = 0;
+    const maxMisses = 5;
+    let targets = [];
+    let gameOver = false;
+    let spawnRate = 1000;
+    let elapsedTime = 0;
+    let lastTime = 0;
+
+    const fruitTypes = [
+      { name: 'strawberry', points: 1, img: 'https://i.imgur.com/ru3zGnE.png' },
+      { name: 'pineapple', points: 3, img: 'https://i.imgur.com/BDXcnb9.png' },
+      { name: 'watermelon', points: 5, img: 'https://i.imgur.com/QPgh9rI.png' },
+      { name: 'bomb', points: -5, img: 'https://i.imgur.com/ivIVNzf.png' }
+    ];
+
+    const images = {};
+    fruitTypes.forEach(fruit => {
+      const img = new Image();
+      img.src = fruit.img;
+      images[fruit.name] = img;
+    });
+
+    function spawnTarget() {
+      if (gameOver) return;
+      const type = fruitTypes[Math.floor(Math.random() * fruitTypes.length)];
+      const x = Math.random() * (canvas.width - 60);
+      const speed = 2 + elapsedTime / 15000;
+      targets.push({ x, y: -60, type, speed });
+    }
+
+    function updateTargets() {
+      for (let i = targets.length - 1; i >= 0; i--) {
+        const t = targets[i];
+        t.y += t.speed;
+        if (t.y > canvas.height) {
+          if (t.type.points > 0) missed++;
+          targets.splice(i, 1);
+          if (missed >= maxMisses) endGame();
+        }
+      }
+    }
+
+    function drawTargets() {
+      targets.forEach(t => {
+        ctx.drawImage(images[t.type.name], t.x, t.y, 60, 60);
+      });
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawTargets();
+    }
+
+    function gameLoop(timestamp) {
+      if (!lastTime) lastTime = timestamp;
+      const delta = timestamp - lastTime;
+      elapsedTime += delta;
+      lastTime = timestamp;
+
+      updateTargets();
+      draw();
+      if (!gameOver) requestAnimationFrame(gameLoop);
+    }
+
+    canvas.addEventListener('click', e => {
+      if (gameOver) return;
+      const mouseX = e.clientX;
+      const mouseY = e.clientY;
+
+      const flash = document.getElementById('flash');
+      const gun = document.getElementById('gun');
+      flash.style.display = 'block';
+      gun.style.transform = 'translateX(-50%) rotate(-10deg)';
+      setTimeout(() => {
+        flash.style.display = 'none';
+        gun.style.transform = 'translateX(-50%) rotate(0deg)';
+      }, 100);
+
+      for (let i = targets.length - 1; i >= 0; i--) {
+        const t = targets[i];
+        if (
+          mouseX >= t.x && mouseX <= t.x + 60 &&
+          mouseY >= t.y && mouseY <= t.y + 60
+        ) {
+          score += t.type.points;
+          if (t.type.points < 0) missed++;
+          targets.splice(i, 1);
+          break;
+        }
+      }
+
+      if (missed >= maxMisses) endGame();
+
+      document.getElementById('scoreboard').innerText =
+        `Score: ${score} | Missed: ${missed}/${maxMisses}`;
+    });
+
+    function endGame() {
+      gameOver = true;
+      document.getElementById('game-over').style.display = 'block';
+      document.getElementById('final-score').innerText = `Game Over! Final Score: ${score}`;
+    }
+
+    document.getElementById('restart-btn').onclick = () => {
+      score = 0;
+      missed = 0;
+      elapsedTime = 0;
+      lastTime = 0;
+      targets = [];
+      gameOver = false;
+      document.getElementById('game-over').style.display = 'none';
+      document.getElementById('scoreboard').innerText =
+        `Score: ${score} | Missed: ${missed}/${maxMisses}`;
+      requestAnimationFrame(gameLoop);
+    };
+
+    setInterval(spawnTarget, 1000);
+    requestAnimationFrame(gameLoop);
+  </script>
+</body>
+</html>
